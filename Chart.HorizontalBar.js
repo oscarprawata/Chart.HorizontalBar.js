@@ -38,7 +38,10 @@
 		barDatasetSpacing : 1,
 
 		//String - A legend template
-		legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<datasets.length; i++){%><li><span style=\"background-color:<%=datasets[i].fillColor%>\"></span><%if(datasets[i].label){%><%=datasets[i].label%><%}%></li><%}%></ul>"
+		legendTemplate : "<ul class=\"<%=name.toLowerCase()%>-legend\"><% for (var i=0; i<datasets.length; i++){%><li><span style=\"background-color:<%=datasets[i].fillColor%>\"></span><%if(datasets[i].label){%><%=datasets[i].label%><%}%></li><%}%></ul>",
+        
+        //Number - The width of the label area vs canvas width. Set to 0 for autoflow
+        labelAreaWidthRatio: 0.3
 
 	};
 
@@ -167,6 +170,36 @@
 
     			return Math.round(valueOffset);
     		},
+            
+            fragmentText: function (ctx, text, maxWidth) {
+                    var words = text.split(' '),
+                        lines = [],
+                        line = "";
+                    if (ctx.measureText(text).width < maxWidth) {
+                        return [text];
+                    }
+                    while (words.length > 0) {
+                        while (ctx.measureText(words[0]).width >= maxWidth) {
+                            var tmp = words[0];
+                            words[0] = tmp.slice(0, -1);
+                            if (words.length > 1) {
+                                words[1] = tmp.slice(-1) + words[1];
+                            } else {
+                                words.push(tmp.slice(-1));
+                            }
+                        }
+                        if (ctx.measureText(line + words[0]).width < maxWidth) {
+                            line += words.shift() + " ";
+                        } else {
+                            lines.push(line);
+                            line = "";
+                        }
+                        if (words.length === 0) {
+                            lines.push(line);
+                        }
+                    }
+                    return lines;
+                },
 
         draw : function(){
     			var ctx = this.ctx,
@@ -185,7 +218,19 @@
     					ctx.textAlign = "right";
     					ctx.textBaseline = "middle";
     					if (this.showLabels){
-    						ctx.fillText(labelString,xStart - 10,yLabelCenter);
+    						var lines = this.fragmentText(ctx, labelString, this.xScalePaddingLeft - 10);
+                                var linesCount = lines.length;
+                                if (linesCount === 1) {
+                                    ctx.fillText(labelString, xStart - 5, yLabelCenter);
+                                } else {
+                                    var lineHeight = options.scaleFontSize + (options.barDatasetSpacing * 2);
+                                    var labelLineY = yLabelCenter - (((linesCount - 1) / 2) * lineHeight);
+                                    lines.forEach(function (line, i) {
+                                        //console.log(labelY);
+                                        ctx.fillText(line, xStart - 5, labelLineY);
+                                        labelLineY += lineHeight;
+                                    });
+                                }
     					}
 
                         if (index === 0 && !drawHorizontalLine) {
@@ -326,6 +371,10 @@
 			},this);
 
 			this.buildScale(data.labels);
+            
+            if (this.options.labelAreaWidthRatio > 0) {
+                this.scale.xScalePaddingLeft = Math.round(this.chart.width * this.options.labelAreaWidthRatio);
+            }
 
       this.BarClass.prototype.left = Math.round(this.scale.xScalePaddingLeft);
 
